@@ -491,7 +491,7 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-
+	std::cout << "sv_cheats 1;enable_debug_overlays 1;\n";
 	//write drawlines
 	for (Entity& ent : entities)
 	{
@@ -506,7 +506,9 @@ int main(int argc, char* argv[])
 				std::cout << "script_client DebugDrawLine("
 					<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
 					<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
-					<< "255, 255, 255, false, 60);\n";
+					<< abs((int)ent.origin.x % 32) * 8 << ", "
+					<< abs((int)ent.origin.y % 32) * 8 << ", "
+					<< abs((int)ent.origin.z % 32) * 8 << ", false, 60); \n";
 #else
 				// Desmos 3D lol
 				std::cout << "["
