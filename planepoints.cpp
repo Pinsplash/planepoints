@@ -395,12 +395,12 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 constexpr float k_flEpsilon = 0.0001f;
 
 
-int main()
+int main(int argc, char* argv[])
 {
 	std::vector<Entity> entities;
 
 	//read entity data
-	std::ifstream ReadFile("filename.txt");
+	std::ifstream ReadFile(argc == 1 ? "filename.txt" : argv[1]);
 	ParseFile(ReadFile, entities);
 	ReadFile.close();
 
@@ -517,4 +517,5 @@ int main()
 			}
 		}
 	}
+	std::cin.get();
 }
