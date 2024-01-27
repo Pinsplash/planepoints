@@ -8,9 +8,9 @@ Created by Pinsplash, much help from OzxyBox.
 # To generate cfg files
 (Note: Once this project is running smoothly, this will be done for you.)
 
-Extract the entity data with the [Titanfall VPK Tool](https://github.com/SenorGeese/Titanfall2/blob/master/tools/Titanfall_VPKTool3.4_Portable.zip). The important file will be named *`mapname`*`_script.ent`. Put it in the same place as `planepoints.exe`. Change its name to `filename.txt` (yes this is dumb and will be fixed soon).
+Extract the entity data with the [Titanfall VPK Tool](https://github.com/SenorGeese/Titanfall2/blob/master/tools/Titanfall_VPKTool3.4_Portable.zip). The important file will be named *`mapname`*`_script.ent`. Drag the file onto `planepoints.exe`.
 
-Run `planepoints.exe` and copy the commands from the text box. Put them in a cfg file in `/Titanfall2/r2/cfg/`.
+Copy the commands from the text box. Put them in a cfg file in `/Titanfall2/r2/cfg/`.
 
 # To show in-game
 Put the cfg file(s) in `/Titanfall2/r2/cfg/`.
