@@ -10,7 +10,7 @@ Created by Pinsplash, much help from OzxyBox.
 
 Extract the entity data with the [Titanfall VPK Tool](https://github.com/SenorGeese/Titanfall2/blob/master/tools/Titanfall_VPKTool3.4_Portable.zip). The important file will be named *`mapname`*`_script.ent`. Drag the file onto `planepoints.exe`.
 
-Put the commands from the text box in a cfg file in `/Titanfall2/r2/cfg/`.
+Run `planepoints.exe` and copy the commands from the text box. Put them in a cfg file in `/Titanfall2/r2/cfg/`.
 
 # To show in-game
 Put the cfg file(s) in `/Titanfall2/r2/cfg/`.
