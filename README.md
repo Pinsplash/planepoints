@@ -18,3 +18,6 @@ Put the cfg file(s) in `/Titanfall2/r2/cfg/`.
 Recommended to run the game with [VanillaPlus](https://northstar.thunderstore.io/package/NanohmProtogen/VanillaPlus/).
 
 In the console, put `sv_cheats 1`, `enable_debug_overlays 1`, and finally `exec` followed by the name of the cfg file that matches with the appropriate map.
+
+# Limitations
+* Cannot reflect the current state of the trigger. (Disabled or not, exists currently or not.) This may be possible to overcome after thoroughly analyzing what is possible.
