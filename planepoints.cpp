@@ -310,7 +310,7 @@ Plane ParsePlane(const std::string& str, Vector3 origin)
 	return plane;
 }
 
-constexpr float k_flEpsilon = 0.0001f;
+constexpr float k_flEpsilon = 0.001f;
 
 void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 {
@@ -449,6 +449,7 @@ bool IsNear( float a, float b, float eps = k_flEpsilon )
 	return -eps < c && c < eps;
 }
 
+
 bool ShouldSkipPlane( const Plane& plane1, const Plane& plane2 )
 {
 	// Are 1 and 2 parallel or opposing? If so, there will never be a intersection
@@ -480,12 +481,173 @@ bool TestPointInBrush( const Brush& brush, const Vector3& p )
 	return true;
 }
 
+
+// Each edge pair corresponds to two planes
+constexpr uint32_t k_iInvalidVertex = 0xFFFFFFFF;
+struct EdgePair
+{
+	uint32_t iVertex1;
+	uint32_t iVertex2;
+};
+
 // Util class for building brush edge lists
 class BrushBuilder
 {
 public:
-	void Build( Brush &brush );
+	BrushBuilder();
+	~BrushBuilder();
+
+
+	void Build( Brush& brush );
+
+private:
+
+	void BeginBrush( int nPlanes );
+
+	// Returns the edge shared by two planes, x and y
+	EdgePair& GetEdge( int x, int y );
+
+	// Adds a vertex onto a given edge shared by two planes, x and y 
+	// Returns true when the given edge now has two pairs
+	bool PushPartialEdge( int x, int y, uint32_t iVert );
+
+	// Stores a vertex and returns its index or returns the index of the vertex if it's already stored
+	uint32_t StoreVertex( const Vector3& newVert );
+
+	int m_nPlaneCount;
+
+	// This is a triangular array of all potential edge pairings between planes
+	int m_nEdgeCount;
+	int m_nEdgeCapacity;
+	EdgePair* m_pEdgePairs;
+
+	// This is a set of all vertices with no duplicates
+	std::vector<Vector3> m_vecVerts;
 };
+
+
+BrushBuilder::BrushBuilder()
+{
+	m_nPlaneCount = 0;
+	m_nEdgeCount = 0;
+	m_nEdgeCapacity = 0;
+	m_pEdgePairs = nullptr;
+
+	// Setup with basic starter data
+	BeginBrush( 6 );
+}
+
+BrushBuilder::~BrushBuilder()
+{
+	delete[] m_pEdgePairs;
+}
+
+void BrushBuilder::BeginBrush( int nPlanes )
+{
+	// Each plane can share an edge with another plane.
+	// If each plane were to interact with every other plane (including itself), that'd be n^2 edges
+	// We can optimize this down, as an edge between plane1 and plane2 is the same as an edge between plane2 and plane1
+	// We also don't care about interactions between plane1 and plane1, as the a plane cannot intersect with itself
+	// This is just the formula to find the nth triangular number, but we're subtracting 1 off nPlanes
+	int nPotentialEdges = ( nPlanes - 1 ) * nPlanes / 2;
+
+	// If we need more space, then resize our pairs
+	if ( nPotentialEdges > m_nEdgeCapacity )
+	{
+		delete[] m_pEdgePairs;
+		m_pEdgePairs = new EdgePair[nPotentialEdges];
+		m_nEdgeCapacity = nPotentialEdges;
+	}
+
+	// Store the new values
+	m_nPlaneCount = nPlanes;
+	m_nEdgeCount = nPotentialEdges;
+
+	// Clear out the old data
+	memset( m_pEdgePairs, 0xFF, nPotentialEdges * sizeof( EdgePair ) );
+	m_vecVerts.clear();
+}
+
+EdgePair& BrushBuilder::GetEdge( int x, int y )
+{
+	// Ensure the lowest is always plane y
+	if ( x < y )
+		std::swap( x, y );
+	
+	// Get the index within our triangular array
+	// I thought indexing into this would be easier, but oh well!
+
+	// Sum of an arithmetic series to get the row Y
+	int a1  = m_nPlaneCount - 1;
+	int an  = m_nPlaneCount - y;
+	int n   = y;
+	int sum = y * ( a1 + an ) / 2;
+
+	// Get the index for column x
+	int idx = sum + (x - y - 1);
+
+	// return the edge!
+	return m_pEdgePairs[idx];
+}
+
+bool BrushBuilder::PushPartialEdge( int x, int y, uint32_t iVertex )
+{
+	EdgePair& edge = GetEdge( x, y );
+
+
+	// If it's already on the edge, ignore the request
+	if ( edge.iVertex1 == iVertex || edge.iVertex2 == iVertex )
+	{
+		// We need to still return true if the edge is full!
+		// One of the two verts are already valid, we always fill iVertex1 first, so iVertex2 is either valid or invalid
+		return edge.iVertex2 == k_iInvalidVertex ? false : true;
+	}
+
+	// Fill iVertex1 first
+	if ( edge.iVertex1 == k_iInvalidVertex )
+	{
+		edge.iVertex1 = iVertex;
+		return false;
+	}
+	
+	// Fill iVertex2 last
+	if ( edge.iVertex2 == k_iInvalidVertex )
+	{
+		edge.iVertex2 = iVertex;
+		return true;
+	}
+
+	// Uh oh, pushing a third vert?
+	const Vector3& v1 = m_vecVerts[edge.iVertex1];
+	const Vector3& v2 = m_vecVerts[edge.iVertex2];
+	const Vector3& v3 = m_vecVerts[iVertex];
+	std::cout << "Hey!! The edge (" << x << "," << y << ") already has two verts!\n";
+	std::cout << "\t Vertex 1 : " << v1.x << ", " << v1.y << ", " << v1.z << "\n";
+	std::cout << "\t Vertex 2 : " << v2.x << ", " << v2.y << ", " << v2.z << "\n";
+	std::cout << "\t Vertex 3 : " << v3.x << ", " << v3.y << ", " << v3.z << "\n";
+	return true;
+}
+
+
+uint32_t BrushBuilder::StoreVertex( const Vector3& newVert )
+{
+	// Ideally, we'd just be using std::set or std::unordered_set, but both are being a pain to use..
+
+	// Find a vert with the value close enough to our newVert
+	int n = m_vecVerts.size();
+	for ( int i = 0; i < n; i++ )
+	{
+		const Vector3& curVert = m_vecVerts[i];
+		if ( IsNear( curVert.x, newVert.x ) && IsNear( curVert.y, newVert.y ) && IsNear( curVert.z, newVert.z ) )
+			return i;
+	}
+
+	// No duplicate found! We'll need to store it then
+	int idx = m_vecVerts.size();
+	m_vecVerts.push_back( newVert );
+	return idx;
+}
+
 
 void BrushBuilder::Build( Brush& brush )
 {
@@ -498,13 +660,21 @@ void BrushBuilder::Build( Brush& brush )
 		return;
 	}
 
+	// Good brush! We can begin!
+	BeginBrush( nPlanes );
+
+	// Note: If issues come up with points not combining up properly, then it
+	//       might be worth while to recenter everything for floating point accuracy
+
+
 	// Get all plane intersections
-	for (int iPlane1 = 0; iPlane1 < nPlanes; iPlane1++)
+	for (int iPlane1 = 0; iPlane1 < nPlanes - 2; iPlane1++)
 	{
 		Plane& plane1 = brush.planes[iPlane1];
 		if (plane1.skip)
 			continue;
-		for (int iPlane2 = iPlane1 + 1; iPlane2 < nPlanes; iPlane2++)
+		
+		for (int iPlane2 = iPlane1 + 1; iPlane2 < nPlanes - 1; iPlane2++)
 		{
 			Plane& plane2 = brush.planes[iPlane2];
 			if (plane2.skip)
@@ -514,10 +684,6 @@ void BrushBuilder::Build( Brush& brush )
 			if ( ShouldSkipPlane( plane1, plane2 ) )
 				continue;
 
-			// Planes 1 and 2 share an edge
-			Edge edge;
-			int intersectCount = 0;
-
 			// Loop for the other remaining untested planes
 			for (int iPlane3 = iPlane2 + 1; iPlane3 < nPlanes; iPlane3++)
 			{
@@ -525,7 +691,13 @@ void BrushBuilder::Build( Brush& brush )
 				if (plane3.skip)
 					continue;
 
-				// Do our 3 planes intersect? If not, next plane.
+				// Is it parallel or opposing?
+				if ( ShouldSkipPlane( plane3, plane1 ) )
+					continue;
+				if ( ShouldSkipPlane( plane3, plane2 ) )
+					continue;
+
+				// Do our 3 planes intersect? If not, next plane
 				Vector3 p;
 				if (!PlaneIntersect(plane1, plane2, plane3, &p))
 				{
@@ -539,33 +711,43 @@ void BrushBuilder::Build( Brush& brush )
 				if ( !TestPointInBrush( brush, p ) )
 					continue;
 
-						
-				// This one's good! Store it onto the edge
-				if (intersectCount == 0)
-					edge.stem = p;
-				else
-					edge.tail = p;
-				intersectCount++;
 #if DEBUG_LOG
 				std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " found\n";
 #endif
 
-				if (intersectCount == 2)
+				// Good intersection! Store the point and push the three partial edges
+				uint32_t iVert = StoreVertex( p );
+
+				PushPartialEdge( iPlane3, iPlane1, iVert );
+				PushPartialEdge( iPlane3, iPlane2, iVert );
+
+				if ( PushPartialEdge( iPlane2, iPlane1, iVert ) )
 				{
-					// Completed edge!
+					// Our pair is full! No need to compute more intersections for iPlane1 and iPlane2
 #if DEBUG_LOG
 					std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << " completed edge\n";
 #endif
-					brush.edges.push_back(edge);
 					break;
 				}
 			}
+		}
+	}
 
-			if (intersectCount == 2)
-			{
-				// Completed edge!
+
+	// Emit edges
+	int iEdge = 0;
+	for ( int iPlane1 = 0; iPlane1 < nPlanes - 1; iPlane1++ )
+	{
+		for ( int iPlane2 = iPlane1 + 1; iPlane2 < nPlanes; iPlane2++ )
+		{
+			EdgePair& edge = m_pEdgePairs[iEdge++];
+
+			// Skip invalid edges
+			if ( edge.iVertex1 == k_iInvalidVertex || edge.iVertex2 == k_iInvalidVertex )
 				continue;
-			}
+
+			// Emit!
+			brush.edges.push_back( { m_vecVerts[edge.iVertex1], m_vecVerts[edge.iVertex2] } );
 		}
 	}
 }
@@ -600,8 +782,7 @@ int main(int argc, char* argv[])
 			{
 				Vector3 stem = ent.origin + edge.stem;
 				Vector3 tail = ent.origin + edge.tail;
-				if (abs(stem.x - tail.x) < 1 && abs(stem.y - tail.y) < 1 && abs(stem.z - tail.z < 1))
-					continue;
+
 #if 1
 				std::cout << "script_client DebugDrawLine("
 					<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
