@@ -11,6 +11,10 @@
 #include <vector>
 #include <sstream>
 
+
+#define DEBUG_LOG 0
+
+
 // Vector 3
 struct Vector3
 {
@@ -296,9 +300,13 @@ Plane ParsePlane(const std::string& str, Vector3 origin)
 	// Parse the plane
 	Plane plane;
 	sscanf_s(str.c_str(), "%f %f %f %f", &plane.normal.x, &plane.normal.y, &plane.normal.z, &plane.dist);
+
+#if DEBUG_LOG
 	//debug
 	Vector3 vecPlanePos = plane.normal * plane.dist;
 	std::cout << "script_client DebugDrawLine(Vector(" << origin.x << ", " << origin.y << ", " << origin.z << "), Vector(" << origin.x + vecPlanePos.x << ", " << origin.y + vecPlanePos.y << ", " << origin.z + vecPlanePos.z << "), 255, 255, 255, false, 60); \n";
+#endif
+
 	return plane;
 }
 
@@ -419,7 +427,9 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 
 			// Set the plane
 			brush.planes[iPlane] = plane;
+#if DEBUG_LOG
 			std::cout << "Add plane " << iPlane << "\n";
+#endif
 		}
 		else if (key == "*trigger_bounds_mins")
 		{
@@ -428,6 +438,134 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 		else if (key == "*trigger_bounds_maxs")
 		{
 			newEntity.maxs = ParseVector(value);
+		}
+	}
+}
+
+
+bool IsNear( float a, float b, float eps = k_flEpsilon )
+{
+	float c = a - b;
+	return -eps < c && c < eps;
+}
+
+bool ShouldSkipPlane( const Plane& plane1, const Plane& plane2 )
+{
+	// Are 1 and 2 parallel or opposing? If so, there will never be a intersection
+	float f = dotProduct( plane1.normal, plane2.normal );
+	if ( IsNear( fabs( f ), 1.0 ) )
+	{
+#if DEBUG_LOG
+		std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << " skipped because parallel\n";
+#endif
+		return true;
+	}
+	return false;
+}
+
+bool TestPointInBrush( const Brush& brush, const Vector3& p )
+{
+	// Test if the point is past any planes on the brush
+	for ( const Plane &k : brush.planes )
+	{
+		if ( k.skip )
+			continue;
+
+		// Get the dist of the point for the plane normal
+		if ( dotProduct( p, k.normal ) - k.dist > k_flEpsilon )
+			return false;
+	}
+
+	// Passed all plane tests!
+	return true;
+}
+
+// Util class for building brush edge lists
+class BrushBuilder
+{
+public:
+	void Build( Brush &brush );
+};
+
+void BrushBuilder::Build( Brush& brush )
+{
+	int nPlanes = brush.planes.size();
+
+	// We need at least 4 plans for a brush
+	if (nPlanes < 4)
+	{
+		std::cout << "Less than 4 planes!\n";
+		return;
+	}
+
+	// Get all plane intersections
+	for (int iPlane1 = 0; iPlane1 < nPlanes; iPlane1++)
+	{
+		Plane& plane1 = brush.planes[iPlane1];
+		if (plane1.skip)
+			continue;
+		for (int iPlane2 = iPlane1 + 1; iPlane2 < nPlanes; iPlane2++)
+		{
+			Plane& plane2 = brush.planes[iPlane2];
+			if (plane2.skip)
+				continue;
+
+			// Is it parallel or opposing?
+			if ( ShouldSkipPlane( plane1, plane2 ) )
+				continue;
+
+			// Planes 1 and 2 share an edge
+			Edge edge;
+			int intersectCount = 0;
+
+			// Loop for the other remaining untested planes
+			for (int iPlane3 = iPlane2 + 1; iPlane3 < nPlanes; iPlane3++)
+			{
+				Plane& plane3 = brush.planes[iPlane3];
+				if (plane3.skip)
+					continue;
+
+				// Do our 3 planes intersect? If not, next plane.
+				Vector3 p;
+				if (!PlaneIntersect(plane1, plane2, plane3, &p))
+				{
+#if DEBUG_LOG
+					std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " skipped because they don't intersect\n";
+#endif
+					continue;
+				}
+
+				// Cull points outside of the solid
+				if ( !TestPointInBrush( brush, p ) )
+					continue;
+
+						
+				// This one's good! Store it onto the edge
+				if (intersectCount == 0)
+					edge.stem = p;
+				else
+					edge.tail = p;
+				intersectCount++;
+#if DEBUG_LOG
+				std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " found\n";
+#endif
+
+				if (intersectCount == 2)
+				{
+					// Completed edge!
+#if DEBUG_LOG
+					std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << " completed edge\n";
+#endif
+					brush.edges.push_back(edge);
+					break;
+				}
+			}
+
+			if (intersectCount == 2)
+			{
+				// Completed edge!
+				continue;
+			}
 		}
 	}
 }
@@ -442,119 +580,15 @@ int main(int argc, char* argv[])
 	ParseFile(ReadFile, entities);
 	ReadFile.close();
 
+	BrushBuilder bb;
+
 	//get line from two intersecting planes
 	//every plane in a brush must be checked against all others in the brush
 	for (Entity& ent : entities)
-	{
 		for (Brush& brush : ent.brushes)
-		{
-			int nPlanes = brush.planes.size();
+			bb.Build( brush );
 
-			// We need at least 4 plans for a brush
-			if (nPlanes < 4)
-			{
-				std::cout << "Less than 4 planes!\n";
-				continue;
-			}
 
-			// Get all plane intersections
-			for (int iPlane1 = 0; iPlane1 < nPlanes; iPlane1++)
-			{
-				Plane& plane1 = brush.planes[iPlane1];
-				if (plane1.skip)
-					continue;
-				for (int iPlane2 = iPlane1 + 1; iPlane2 < nPlanes; iPlane2++)
-				{
-					Plane& plane2 = brush.planes[iPlane2];
-					if (plane2.skip)
-						continue;
-
-					// Are 1 and 2 opposing and/or parallel? If so, there will never be a intersection
-					float f = dotProduct(plane1.normal, plane2.normal);
-					if (fabs(fabs(f) - 1.0) < k_flEpsilon) // f is near -1.0 or 1.0
-					{
-						std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << " skipped because parallel\n";
-						continue;
-					}
-
-					// Planes 1 and 2 share an edge
-					Edge edge;
-					int intersectCount = 0;
-
-					// Loop for the other remaining untested planes
-					for (int iPlane3 = iPlane2 + 1; iPlane3 < nPlanes; iPlane3++)
-					{
-						Plane& plane3 = brush.planes[iPlane3];
-						if (plane3.skip)
-							continue;
-
-						// Do our 3 planes intersect? If not, next plane.
-						Vector3 p;
-						if (!PlaneIntersect(plane1, plane2, plane3, &p))
-						{
-							std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " skipped because they don't intersect\n";
-							continue;
-						}
-						// Hit!
-
-						// Cull points outside of the solid
-						
-						bool in = true;
-						for (Plane& k : brush.planes)
-						{
-							if (k.skip)
-								continue;
-							// Skip the planes we're currently working on
-							if (&k == &plane1 || &k == &plane2 || &k == &plane3)
-								continue;
-
-							// Get the dist of the point for the plane normal
-							if (dotProduct(p, k.normal) - k.dist > k_flEpsilon)
-							{
-								in = false;
-								Vector3 v1Pos = plane1.normal * plane1.dist;
-								Vector3 v2Pos = plane2.normal * plane2.dist;
-								Vector3 v3Pos = plane3.normal * plane3.dist;
-								Vector3 vkPos = k.normal * k.dist;
-								std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " skipped because outside solid\n"
-									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + v1Pos.x << ", " << ent.origin.y + v1Pos.y << ", " << ent.origin.z + v1Pos.z << "), 255, 255, 255, false, 60); \n"
-									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + v2Pos.x << ", " << ent.origin.y + v2Pos.y << ", " << ent.origin.z + v2Pos.z << "), 255, 255, 255, false, 60); \n"
-									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + v3Pos.x << ", " << ent.origin.y + v3Pos.y << ", " << ent.origin.z + v3Pos.z << "), 255, 255, 255, false, 60); \n"
-									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + vkPos.x << ", " << ent.origin.y + vkPos.y << ", " << ent.origin.z + vkPos.z << "), 255, 0, 0, false, 60); \n";
-								break;
-							}
-						}
-
-						// Out of the solid. Skip it
-						if (!in)
-							continue;
-						
-						// This one's good! Store it onto the edge
-						if (intersectCount == 0)
-							edge.stem = p;
-						else
-							edge.tail = p;
-						intersectCount++;
-						std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " found\n";
-
-						if (intersectCount == 2)
-						{
-							// Completed edge!
-							std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << " completed edge\n";
-							brush.edges.push_back(edge);
-							break;
-						}
-					}
-
-					if (intersectCount == 2)
-					{
-						// Completed edge!
-						continue;
-					}
-				}
-			}
-		}
-	}
 	std::cout << "sv_cheats 1;enable_debug_overlays 1;\n";
 	//write drawlines
 	for (Entity& ent : entities)
