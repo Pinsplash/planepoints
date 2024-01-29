@@ -49,6 +49,10 @@ Vector3& operator*= (Vector3& l, float r)
 	l.z *= r;
 	return l;
 }
+bool operator== (const Vector3& l, const Vector3& r)
+{
+	return (l.x == r.x) && (l.y == r.y) && (l.z == r.z);
+}
 
 // Vector 4
 struct Vector4
@@ -112,6 +116,8 @@ struct Plane
 {
 	Vector3 normal;
 	float dist = 0;
+	bool skip = false;
+	bool bbox = false;
 };
 
 struct Edge
@@ -132,6 +138,8 @@ struct Entity
 {
 	std::string editorclass;
 	std::string classname;
+	std::string targetname;
+	std::string scriptflag;
 
 	Vector3 origin;
 	Vector3 mins;
@@ -283,20 +291,25 @@ Vector3 ParseVector(const std::string& str)
 	return v;
 }
 
-Plane ParsePlane(const std::string& str)
+Plane ParsePlane(const std::string& str, Vector3 origin)
 {
 	// Parse the plane
 	Plane plane;
 	sscanf_s(str.c_str(), "%f %f %f %f", &plane.normal.x, &plane.normal.y, &plane.normal.z, &plane.dist);
+	//debug
+	Vector3 vecPlanePos = plane.normal * plane.dist;
+	std::cout << "script_client DebugDrawLine(Vector(" << origin.x << ", " << origin.y << ", " << origin.z << "), Vector(" << origin.x + vecPlanePos.x << ", " << origin.y + vecPlanePos.y << ", " << origin.z + vecPlanePos.z << "), 255, 255, 255, false, 60); \n";
 	return plane;
 }
+
+constexpr float k_flEpsilon = 0.0001f;
 
 void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 {
 	std::string textLine;
-
 	Entity newEntity;
-
+	int iSkipBB = 0;
+	int iLastBrush = 0;
 	while (getline(ReadFile, textLine))
 	{
 		// Skip any blank lines
@@ -336,18 +349,17 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 
 		if (key == "editorclass")
 		{
-			std::cout << "Found editor class " << value << "\n";
 			newEntity.editorclass = value;
 		}
 		else if (key == "origin")
 		{
 			newEntity.origin = ParseVector(value);
-			std::cout << "Found origin " << newEntity.origin.x << " " << newEntity.origin.y << " " << newEntity.origin.z << "\n";
 		}
 		else if (key == "classname")
 		{
-			std::cout << "Found classname " << value << "\n";
 			newEntity.classname = value;
+			iSkipBB = 0;
+			iLastBrush = 0;
 		}
 		else if (key.find("*trigger_brush_") != std::string::npos)
 		{
@@ -358,12 +370,24 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 			int iBrush = stoi(key.substr(token1.length(), brushNumDigits));
 			//std::cout << "brush " << brush << ", ";
 
+			if (iLastBrush != iBrush)
+			{
+				iSkipBB = 0;
+				iLastBrush = iBrush;
+			}
 			const std::string token2 = "_plane_";
 			int iPlane = stoi(key.substr(token1.length() + brushNumDigits + token2.length()));
 			//std::cout << "iPlane " << iPlane << ", ";
 
 			// Parse the plane
-			Plane plane = ParsePlane(value);
+			Plane plane = ParsePlane(value, newEntity.origin);
+
+			if (iSkipBB <= 5)//0-5 are bounding box of the brush
+			{
+				std::cout << "Found BB plane " << iSkipBB << "\n";
+				iSkipBB++;
+				plane.bbox = true;
+			}
 
 			// Normally, I'd just use pushback, but these have IDs soooo idk
 
@@ -378,8 +402,24 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 			if (brush.planes.size() <= iPlane)
 				brush.planes.resize(iPlane + 1);
 
+			//don't add plane if clone exists
+			int nPlanes = brush.planes.size();
+			for (int iPlane2 = 0; iPlane2 < nPlanes; iPlane2++)
+			{
+				Plane& plane2 = brush.planes[iPlane2];
+				float f = dotProduct(plane.normal, plane2.normal);
+				//std::cout << "Plane " << iPlane << " and " << iPlane2 << " dot product is " << f << "\n";
+
+				if (f == 1)
+				{
+					std::cout << "Clone Plane: " << iPlane << " and " << iPlane2 << "\n";
+					plane.skip = true;
+				}
+			}
+
 			// Set the plane
 			brush.planes[iPlane] = plane;
+			std::cout << "Add plane " << iPlane << "\n";
 		}
 		else if (key == "*trigger_bounds_mins")
 		{
@@ -391,8 +431,6 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 		}
 	}
 }
-
-constexpr float k_flEpsilon = 0.0001f;
 
 
 int main(int argc, char* argv[])
@@ -423,14 +461,21 @@ int main(int argc, char* argv[])
 			for (int iPlane1 = 0; iPlane1 < nPlanes; iPlane1++)
 			{
 				Plane& plane1 = brush.planes[iPlane1];
+				if (plane1.skip)
+					continue;
 				for (int iPlane2 = iPlane1 + 1; iPlane2 < nPlanes; iPlane2++)
 				{
 					Plane& plane2 = brush.planes[iPlane2];
+					if (plane2.skip)
+						continue;
 
 					// Are 1 and 2 opposing and/or parallel? If so, there will never be a intersection
 					float f = dotProduct(plane1.normal, plane2.normal);
 					if (fabs(fabs(f) - 1.0) < k_flEpsilon) // f is near -1.0 or 1.0
+					{
+						std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << " skipped because parallel\n";
 						continue;
+					}
 
 					// Planes 1 and 2 share an edge
 					Edge edge;
@@ -440,17 +485,25 @@ int main(int argc, char* argv[])
 					for (int iPlane3 = iPlane2 + 1; iPlane3 < nPlanes; iPlane3++)
 					{
 						Plane& plane3 = brush.planes[iPlane3];
+						if (plane3.skip)
+							continue;
 
 						// Do our 3 planes intersect? If not, next plane.
 						Vector3 p;
 						if (!PlaneIntersect(plane1, plane2, plane3, &p))
+						{
+							std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " skipped because they don't intersect\n";
 							continue;
+						}
 						// Hit!
 
 						// Cull points outside of the solid
+						
 						bool in = true;
 						for (Plane& k : brush.planes)
 						{
+							if (k.skip)
+								continue;
 							// Skip the planes we're currently working on
 							if (&k == &plane1 || &k == &plane2 || &k == &plane3)
 								continue;
@@ -459,6 +512,15 @@ int main(int argc, char* argv[])
 							if (dotProduct(p, k.normal) - k.dist > k_flEpsilon)
 							{
 								in = false;
+								Vector3 v1Pos = plane1.normal * plane1.dist;
+								Vector3 v2Pos = plane2.normal * plane2.dist;
+								Vector3 v3Pos = plane3.normal * plane3.dist;
+								Vector3 vkPos = k.normal * k.dist;
+								std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " skipped because outside solid\n"
+									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + v1Pos.x << ", " << ent.origin.y + v1Pos.y << ", " << ent.origin.z + v1Pos.z << "), 255, 255, 255, false, 60); \n"
+									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + v2Pos.x << ", " << ent.origin.y + v2Pos.y << ", " << ent.origin.z + v2Pos.z << "), 255, 255, 255, false, 60); \n"
+									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + v3Pos.x << ", " << ent.origin.y + v3Pos.y << ", " << ent.origin.z + v3Pos.z << "), 255, 255, 255, false, 60); \n"
+									<< "script_client DebugDrawLine(Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), Vector(" << ent.origin.x + vkPos.x << ", " << ent.origin.y + vkPos.y << ", " << ent.origin.z + vkPos.z << "), 255, 0, 0, false, 60); \n";
 								break;
 							}
 						}
@@ -466,17 +528,19 @@ int main(int argc, char* argv[])
 						// Out of the solid. Skip it
 						if (!in)
 							continue;
-
+						
 						// This one's good! Store it onto the edge
 						if (intersectCount == 0)
 							edge.stem = p;
 						else
 							edge.tail = p;
 						intersectCount++;
+						std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << ", " << iPlane3 << " found\n";
 
 						if (intersectCount == 2)
 						{
 							// Completed edge!
+							std::cout << "Intersection between planes " << iPlane1 << ", " << iPlane2 << " completed edge\n";
 							brush.edges.push_back(edge);
 							break;
 						}
@@ -502,6 +566,8 @@ int main(int argc, char* argv[])
 			{
 				Vector3 stem = ent.origin + edge.stem;
 				Vector3 tail = ent.origin + edge.tail;
+				if (abs(stem.x - tail.x) < 1 && abs(stem.y - tail.y) < 1 && abs(stem.z - tail.z < 1))
+					continue;
 #if 1
 				std::cout << "script_client DebugDrawLine("
 					<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
