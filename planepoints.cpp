@@ -11,7 +11,6 @@
 #include <vector>
 #include <sstream>
 
-
 #define DEBUG_LOG 0
 
 
@@ -144,6 +143,7 @@ struct Entity
 	std::string classname;
 	std::string targetname;
 	std::string scriptflag;
+	std::string spawnclass;
 
 	Vector3 origin;
 	Vector3 mins;
@@ -363,6 +363,18 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 		{
 			newEntity.origin = ParseVector(value);
 		}
+		else if (key == "targetname")
+		{
+			newEntity.targetname = value;
+		}
+		else if (key == "script_flag")
+		{
+			newEntity.scriptflag = value;
+		}
+		else if (key == "spawnclass")
+		{
+			newEntity.spawnclass = value;
+		}
 		else if (key == "classname")
 		{
 			newEntity.classname = value;
@@ -392,7 +404,7 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 
 			if (iSkipBB <= 5)//0-5 are bounding box of the brush
 			{
-				std::cout << "Found BB plane " << iSkipBB << "\n";
+				//std::cout << "Found BB plane " << iSkipBB << "\n";
 				iSkipBB++;
 				plane.bbox = true;
 			}
@@ -420,7 +432,7 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 
 				if (f == 1)
 				{
-					std::cout << "Clone Plane: " << iPlane << " and " << iPlane2 << "\n";
+					//std::cout << "Clone Plane: " << iPlane << " and " << iPlane2 << "\n";
 					plane.skip = true;
 				}
 			}
@@ -621,10 +633,12 @@ bool BrushBuilder::PushPartialEdge( int x, int y, uint32_t iVertex )
 	const Vector3& v1 = m_vecVerts[edge.iVertex1];
 	const Vector3& v2 = m_vecVerts[edge.iVertex2];
 	const Vector3& v3 = m_vecVerts[iVertex];
+	/*
 	std::cout << "Hey!! The edge (" << x << "," << y << ") already has two verts!\n";
 	std::cout << "\t Vertex 1 : " << v1.x << ", " << v1.y << ", " << v1.z << "\n";
 	std::cout << "\t Vertex 2 : " << v2.x << ", " << v2.y << ", " << v2.z << "\n";
 	std::cout << "\t Vertex 3 : " << v3.x << ", " << v3.y << ", " << v3.z << "\n";
+	*/
 	return true;
 }
 
@@ -775,6 +789,19 @@ int main(int argc, char* argv[])
 	//write drawlines
 	for (Entity& ent : entities)
 	{
+#if 0
+		if (strcmp(ent.editorclass.c_str(), "trigger_flag_touching"))//only allow this
+			continue;
+#endif
+#if 0
+		if (strcmp(ent.classname.c_str(), "trigger_once"))//only allow this
+			continue;
+#endif
+		if (!ent.spawnclass.empty()) std::cout << "//Spawn Class: " << ent.spawnclass << "\n";
+		if (!ent.editorclass.empty()) std::cout << "//Editor Class: " << ent.editorclass << "\n";
+		if (!ent.classname.empty()) std::cout << "//Class Name: " << ent.classname << "\n";
+		if (!ent.targetname.empty()) std::cout << "//Target Name: " << ent.targetname << "\n";
+		if (!ent.scriptflag.empty()) std::cout << "//Script Flag: " << ent.scriptflag << "\n";
 		for (Brush& brush : ent.brushes)
 		{
 			//std::cout << "\n";
@@ -782,8 +809,8 @@ int main(int argc, char* argv[])
 			{
 				Vector3 stem = ent.origin + edge.stem;
 				Vector3 tail = ent.origin + edge.tail;
-
 #if 1
+				
 				std::cout << "script_client DebugDrawLine("
 					<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
 					<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
