@@ -932,15 +932,6 @@ int main(int argc, char* argv[])
 	std::vector<Entity> entities;
 	Settings settings;
 
-	//read entity data
-	std::string path = argc == 1 ? "filename.txt" : argv[1];
-	std::ifstream ReadFile(path);
-	std::string base_filename = path.substr(path.find_last_of("/\\") + 1);
-	std::string::size_type const p(base_filename.find_last_of('.'));
-	std::string file_without_extension = base_filename.substr(0, p);
-	ParseFile(ReadFile, entities);
-	ReadFile.close();
-
 	//settings
 	std::cout << "Please drag settings file onto window and press ENTER, or just press ENTER to proceed without one.\n";
 	std::string settingspath;
@@ -949,136 +940,149 @@ int main(int argc, char* argv[])
 	bool n = ReadSettings(ReadSettingsFile, settings);
 	ReadSettingsFile.close();
 
-	BrushBuilder bb;
-
-	//get line from two intersecting planes
-	//every plane in a brush must be checked against all others in the brush
-	for (Entity& ent : entities)
-		for (Brush& brush : ent.brushes)
-			bb.Build( brush );
-
-	std::ofstream writingFile;
-	writingFile.open(file_without_extension + ".cfg");
-	writingFile << "sv_cheats 1;enable_debug_overlays 1;\n";
-	//write drawlines
-	for (Entity& ent : entities)
+	for (int i = 1; i < argc; i++)
 	{
-		//filtering
-		bool allowed = false;
-		bool disallowed = false;
+		entities.clear();
+		//read entity data
+		std::string path = argc == 1 ? "filename.txt" : argv[i];
+		std::ifstream ReadFile(path);
+		std::string base_filename = path.substr(path.find_last_of("/\\") + 1);
+		std::string::size_type const p(base_filename.find_last_of('.'));
+		std::string file_without_extension = base_filename.substr(0, p);
+		ParseFile(ReadFile, entities);
+		ReadFile.close();
 
-		//allow for blacklist
-		if (!settings.defaultAllow)
-		{
-			for (std::string& line : settings.allows)
-			{
-				allowed = CriteriaMet(line, ent);
-				if (allowed)
-					break;//found something that allows us, even one thing
-			}
-		}
+		BrushBuilder bb;
 
-		//re-dis-allow for blacklist
-		//or
-		//disallow for whitelist
-		for (std::string& line : settings.disallows)
-		{
-			disallowed = CriteriaMet(line, ent);
-			if (disallowed)
-				break;
-		}
-
-		//re-allow for whitelist
-		if (settings.defaultAllow)
-		{
-			for (std::string& line : settings.allows)
-			{
-				allowed = CriteriaMet(line, ent);
-				if (allowed)
-					break;
-			}
-		}
-		//std::cout << ent.classname << " defaultAllow " << (settings.defaultAllow ? "true" : "false") << ", disallowed " << (disallowed ? "true" : "false") << ", allowed " << (allowed ? "true" : "false") << "\n";
-		if (settings.defaultAllow)
-		{
-			if (disallowed && !allowed)
-				continue;//got disallowed, no re-allow
-		}
-		else
-		{
-			if (!allowed)
-				continue;//never was allowed
-		}
-
-		bool goodMusts = true;
-		for (std::string& line : settings.musts)
-		{
-			goodMusts = CriteriaMet(line, ent);
-			if (!goodMusts)
-				break;
-		}
-
-		if (!goodMusts)
-			continue;
-
-		bool badAvoids = false;
-		for (std::string& line : settings.avoids)
-		{
-			badAvoids = CriteriaMet(line, ent);
-			if (badAvoids)
-				break;
-		}
-
-		if (badAvoids)
-			continue;
-		
-		if (!ent.spawnclass.empty()) writingFile << "//Spawn Class: " << ent.spawnclass << "\n";
-		if (!ent.editorclass.empty()) writingFile << "//Editor Class: " << ent.editorclass << "\n";
-		if (!ent.classname.empty()) writingFile << "//Class Name: " << ent.classname << "\n";
-		if (!ent.targetname.empty()) writingFile << "//Target Name: " << ent.targetname << "\n";
-		if (!ent.scriptflag.empty()) writingFile << "//Script Flag: " << ent.scriptflag << "\n";
-		if (ent.isTrigger && settings.drawTriggerOutlines)
-		{
+		//get line from two intersecting planes
+		//every plane in a brush must be checked against all others in the brush
+		for (Entity& ent : entities)
 			for (Brush& brush : ent.brushes)
-			{
-				//std::cout << "\n";
-				for (Edge& edge : brush.edges)
-				{
-					Vector3 stem = ent.origin + edge.stem;
-					Vector3 tail = ent.origin + edge.tail;
-#if 1
+				bb.Build(brush);
 
-					writingFile << "script_client DebugDrawLine("
-						<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
-						<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
-						<< abs((int)ent.origin.x % 32) * 8 << ", "
-						<< abs((int)ent.origin.y % 32) * 8 << ", "
-						<< abs((int)ent.origin.z % 32) * 8 << ", "
-						<< (!settings.drawontop ? "true" : "false") << ", "
-						<< settings.duration << ");\n";
-#else
-					// Desmos 3D lol
-					std::cout << "["
-						<< "(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
-						<< "(" << tail.x << ", " << tail.y << ", " << tail.z << ")"
-						<< "]\n";
-#endif
+		std::ofstream writingFile;
+		writingFile.open(file_without_extension + ".cfg");
+		writingFile << "sv_cheats 1;enable_debug_overlays 1;\n";
+		//write drawlines
+		for (Entity& ent : entities)
+		{
+			//filtering
+			bool allowed = false;
+			bool disallowed = false;
+
+			//allow for blacklist
+			if (!settings.defaultAllow)
+			{
+				for (std::string& line : settings.allows)
+				{
+					allowed = CriteriaMet(line, ent);
+					if (allowed)
+						break;//found something that allows us, even one thing
 				}
 			}
+
+			//re-dis-allow for blacklist
+			//or
+			//disallow for whitelist
+			for (std::string& line : settings.disallows)
+			{
+				disallowed = CriteriaMet(line, ent);
+				if (disallowed)
+					break;
+			}
+
+			//re-allow for whitelist
+			if (settings.defaultAllow)
+			{
+				for (std::string& line : settings.allows)
+				{
+					allowed = CriteriaMet(line, ent);
+					if (allowed)
+						break;
+				}
+			}
+			//std::cout << ent.classname << " defaultAllow " << (settings.defaultAllow ? "true" : "false") << ", disallowed " << (disallowed ? "true" : "false") << ", allowed " << (allowed ? "true" : "false") << "\n";
+			if (settings.defaultAllow)
+			{
+				if (disallowed && !allowed)
+					continue;//got disallowed, no re-allow
+			}
+			else
+			{
+				if (!allowed)
+					continue;//never was allowed
+			}
+
+			bool goodMusts = true;
+			for (std::string& line : settings.musts)
+			{
+				goodMusts = CriteriaMet(line, ent);
+				if (!goodMusts)
+					break;
+			}
+
+			if (!goodMusts)
+				continue;
+
+			bool badAvoids = false;
+			for (std::string& line : settings.avoids)
+			{
+				badAvoids = CriteriaMet(line, ent);
+				if (badAvoids)
+					break;
+			}
+
+			if (badAvoids)
+				continue;
+
+			if (!ent.spawnclass.empty()) writingFile << "//Spawn Class: " << ent.spawnclass << "\n";
+			if (!ent.editorclass.empty()) writingFile << "//Editor Class: " << ent.editorclass << "\n";
+			if (!ent.classname.empty()) writingFile << "//Class Name: " << ent.classname << "\n";
+			if (!ent.targetname.empty()) writingFile << "//Target Name: " << ent.targetname << "\n";
+			if (!ent.scriptflag.empty()) writingFile << "//Script Flag: " << ent.scriptflag << "\n";
+			if (ent.isTrigger && settings.drawTriggerOutlines)
+			{
+				for (Brush& brush : ent.brushes)
+				{
+					//std::cout << "\n";
+					for (Edge& edge : brush.edges)
+					{
+						Vector3 stem = ent.origin + edge.stem;
+						Vector3 tail = ent.origin + edge.tail;
+#if 1
+
+						writingFile << "script_client DebugDrawLine("
+							<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
+							<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
+							<< abs((int)ent.origin.x % 32) * 8 << ", "
+							<< abs((int)ent.origin.y % 32) * 8 << ", "
+							<< abs((int)ent.origin.z % 32) * 8 << ", "
+							<< (!settings.drawontop ? "true" : "false") << ", "
+							<< settings.duration << ");\n";
+#else
+						// Desmos 3D lol
+						std::cout << "["
+							<< "(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
+							<< "(" << tail.x << ", " << tail.y << ", " << tail.z << ")"
+							<< "]\n";
+#endif
+					}
+				}
+			}
+			if (settings.drawEntCubes)
+			{
+				writingFile << "script_client DebugDrawCube("
+					<< "Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), "
+					<< "16, "
+					<< abs((int)ent.origin.x % 32) * 8 << ", "
+					<< abs((int)ent.origin.y % 32) * 8 << ", "
+					<< abs((int)ent.origin.z % 32) * 8 << ", "
+					<< (!settings.drawontop ? "true" : "false") << ", "
+					<< settings.duration << ");\n";
+			}
 		}
-		if (settings.drawEntCubes)
-		{
-			writingFile << "script_client DebugDrawCube("
-				<< "Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), "
-				<< "16, "
-				<< abs((int)ent.origin.x % 32) * 8 << ", "
-				<< abs((int)ent.origin.y % 32) * 8 << ", "
-				<< abs((int)ent.origin.z % 32) * 8 << ", "
-				<< (!settings.drawontop ? "true" : "false") << ", "
-				<< settings.duration << ");\n";
-		}
+		std::cout << "Finished writing to " << file_without_extension << ".cfg\n";
+		writingFile.close();
 	}
-	std::cout << "Finished writing to " << file_without_extension << ".cfg\n";
-	writingFile.close();
 	std::cin.get();
 }
