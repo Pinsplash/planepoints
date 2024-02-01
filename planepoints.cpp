@@ -927,21 +927,28 @@ bool CriteriaMet(std::string& line, Entity& ent)
 	return false;
 }
 
+int BaseColorOffCoord(float coord)
+{
+	return (((abs((int)coord % 64) * 4) + 128) / 1.5);
+}
+
 int main(int argc, char* argv[])
 {
+	bool debug = argc == 1;
 	std::vector<Entity> entities;
 	Settings settings;
 
 	//settings
-	std::cout << "Please drag settings file onto window and press ENTER, or just press ENTER to proceed without one.\n";
+	std::cout << "Got file(s). Please drag settings file onto window and press ENTER, or just press ENTER to go without one.\n";
 	std::string settingspath;
 	std::getline(std::cin, settingspath);
 	std::ifstream ReadSettingsFile(settingspath);
 	bool n = ReadSettings(ReadSettingsFile, settings);
 	ReadSettingsFile.close();
 
-	for (int i = 1; i < argc; i++)
+	for (int i = 1; debug || i < argc; i++)
 	{
+		debug = false;
 		entities.clear();
 		//read entity data
 		std::string path = argc == 1 ? "filename.txt" : argv[i];
@@ -962,6 +969,7 @@ int main(int argc, char* argv[])
 
 		std::ofstream writingFile;
 		writingFile.open(file_without_extension + ".cfg");
+		std::cout << "Starting writing to " << file_without_extension << ".cfg\n";
 		writingFile << "sv_cheats 1;enable_debug_overlays 1;\n";
 		//write drawlines
 		for (Entity& ent : entities)
@@ -1034,7 +1042,10 @@ int main(int argc, char* argv[])
 
 			if (badAvoids)
 				continue;
-
+			int color[3];
+			color[0] = BaseColorOffCoord(ent.origin.x);
+			color[1] = BaseColorOffCoord(ent.origin.y);
+			color[2] = BaseColorOffCoord(ent.origin.z);
 			if (!ent.spawnclass.empty()) writingFile << "//Spawn Class: " << ent.spawnclass << "\n";
 			if (!ent.editorclass.empty()) writingFile << "//Editor Class: " << ent.editorclass << "\n";
 			if (!ent.classname.empty()) writingFile << "//Class Name: " << ent.classname << "\n";
@@ -1054,9 +1065,9 @@ int main(int argc, char* argv[])
 						writingFile << "script_client DebugDrawLine("
 							<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
 							<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
-							<< abs((int)ent.origin.x % 32) * 8 << ", "
-							<< abs((int)ent.origin.y % 32) * 8 << ", "
-							<< abs((int)ent.origin.z % 32) * 8 << ", "
+							<< color[0] << ", "
+							<< color[1] << ", "
+							<< color[2] << ", "
 							<< (!settings.drawontop ? "true" : "false") << ", "
 							<< settings.duration << ");\n";
 #else
@@ -1074,9 +1085,9 @@ int main(int argc, char* argv[])
 				writingFile << "script_client DebugDrawCube("
 					<< "Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), "
 					<< "16, "
-					<< abs((int)ent.origin.x % 32) * 8 << ", "
-					<< abs((int)ent.origin.y % 32) * 8 << ", "
-					<< abs((int)ent.origin.z % 32) * 8 << ", "
+					<< color[0] << ", "
+					<< color[1] << ", "
+					<< color[2] << ", "
 					<< (!settings.drawontop ? "true" : "false") << ", "
 					<< settings.duration << ");\n";
 			}
@@ -1084,5 +1095,6 @@ int main(int argc, char* argv[])
 		std::cout << "Finished writing to " << file_without_extension << ".cfg\n";
 		writingFile.close();
 	}
+	std::cout << "Done. Press ENTER or the X button to close.\n";
 	std::cin.get();
 }
