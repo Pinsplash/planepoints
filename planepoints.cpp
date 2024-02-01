@@ -1,7 +1,3 @@
-//Trigger outline display generator for Titanfall 2 maps.
-//This code creates a series of console commands which can be run in VanillaPlus (or some similar mod) to create a simple outline of trigger entities.
-//If you want to view triggers in Respawn's T2 maps, you don't need to run this. The files already exist elsewhere in this repository.
-//Created by Pinsplash, much help from OxzyBox.
 #include <stdio.h>
 #include <math.h>
 //#include <cmath.h>
@@ -13,7 +9,18 @@
 
 #define DEBUG_LOG 0
 
-
+struct Settings
+{
+	bool defaultAllow = true;
+	bool drawontop = true;
+	std::vector<std::string> allows;
+	std::vector<std::string> disallows;
+	std::vector<std::string> musts;
+	std::vector<std::string> avoids;
+	int duration = 60;
+	bool drawTriggerOutlines = true;
+	bool drawEntCubes = false;
+};
 // Vector 3
 struct Vector3
 {
@@ -149,6 +156,7 @@ struct Entity
 	Vector3 mins;
 	Vector3 maxs;
 
+	bool isTrigger = false;
 	std::vector<Brush> brushes;
 };
 
@@ -383,6 +391,7 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 		}
 		else if (key.find("*trigger_brush_") != std::string::npos)
 		{
+			newEntity.isTrigger = true;
 			//std::cout << "string " << key << "\n";
 			const std::string token1 = "*trigger_brush_";
 			size_t brushDigitsPos = key.find("_", token1.length());//some triggers have 10+ brushes
@@ -765,16 +774,176 @@ void BrushBuilder::Build( Brush& brush )
 		}
 	}
 }
+int ReadSettings(std::ifstream& ReadFile, Settings& settings)
+{
+	std::string textLine;
+	bool inComment = false;
+	while (getline(ReadFile, textLine))
+	{
+		//std::cout << textLine << "\n";
+		if (textLine.size() == 0)
+			continue;
 
+		//comments
+		if (textLine[0] == '/' && textLine[1] == '/')
+			continue;
+		else if (textLine[0] == '/' && textLine[1] == '*')//decent but not as good as c++
+			inComment = true;
+		else if (textLine[0] == '*' && textLine[1] == '/')
+			inComment = false;
+		if (inComment)
+			continue;
+
+		size_t keyStart = textLine.find('"');
+		size_t keyEnd = textLine.find('"', keyStart + 1);
+		size_t valueStart = textLine.find('"', keyEnd + 1);
+		size_t valueEnd = textLine.find('"', valueStart + 1);
+
+		keyStart++;
+		valueStart++;
+
+		std::string key = textLine.substr(keyStart, keyEnd - keyStart);
+		std::string value = textLine.substr(valueStart, valueEnd - valueStart);
+		//std::cout << "key " << key << " value " << value << "\n";
+		if (key == "default")
+		{
+			if (!strcmp(value.c_str(), "allow"))
+				settings.defaultAllow = true;
+			else if (!strcmp(value.c_str(), "disallow"))
+				settings.defaultAllow = false;
+			else
+			{
+				std::cout << "Unknown setting for " << key << ". Should be either 'allow' or 'disallow'.\n";
+				return 0;
+			}
+		}
+		else if (key == "drawontop")
+		{
+			if (!strcmp(value.c_str(), "yes"))
+				settings.drawontop = true;
+			else if (!strcmp(value.c_str(), "no"))
+				settings.drawontop = false;
+			else
+			{
+				std::cout << "Unknown setting for " << key << ". Should be either 'yes' or 'no'.\n";
+				return 0;
+			}
+		}
+		else if (key == "drawtriggeroutlines")
+		{
+			if (!strcmp(value.c_str(), "yes"))
+				settings.drawTriggerOutlines = true;
+			else if (!strcmp(value.c_str(), "no"))
+				settings.drawTriggerOutlines = false;
+			else
+			{
+				std::cout << "Unknown setting for " << key << ". Should be either 'yes' or 'no'.\n";
+				return 0;
+			}
+		}
+		else if (key == "drawentcubes")
+		{
+			if (!strcmp(value.c_str(), "yes"))
+				settings.drawEntCubes = true;
+			else if (!strcmp(value.c_str(), "no"))
+				settings.drawEntCubes = false;
+			else
+			{
+				std::cout << "Unknown setting for " << key << ". Should be either 'yes' or 'no'.\n";
+				return 0;
+			}
+		}
+		else if (key == "duration")
+		{
+			settings.duration = stoi(value);
+		}
+		else if (key == "allow" && !settings.defaultAllow)
+		{
+			settings.allows.push_back(value);
+		}
+		else if (key == "disallow" && settings.defaultAllow)
+		{
+			settings.disallows.push_back(value);
+		}
+		else if (key == "must")
+		{
+			settings.musts.push_back(value);
+		}
+		else if (key == "avoid")
+		{
+			settings.avoids.push_back(value);
+		}
+	}
+	return 1;
+}
+
+bool StringMatch(std::string strEnt, std::string strSetting)
+{
+	if (strEnt == strSetting)
+		return true;
+	const char* caEnt = strEnt.c_str();
+	const char* caSetting = strSetting.c_str();
+	while (*caEnt && *caSetting)
+	{
+		unsigned char cEnt = *caEnt;
+		unsigned char cSetting = *caSetting;
+		if (cEnt != cSetting)
+			break;
+		caEnt++;
+		caSetting++;
+	}
+	if (*caSetting == 0 && *caEnt == 0)
+		return true;
+	if (*caSetting == '*' && !strEnt.empty())
+		return true;
+	return false;
+}
+
+bool CriteriaMet(std::string& line, Entity& ent)
+{
+	size_t keyStart = line.find('"');
+	size_t keyEnd = line.find(' ', keyStart + 1);
+	size_t valueEnd = line.find('"', keyEnd + 1);
+
+	keyStart++;
+	std::string key = line.substr(keyStart, keyEnd - keyStart);
+	keyEnd++;
+	std::string value = line.substr(keyEnd, valueEnd - keyEnd);
+
+	if (key == "classname")
+		return StringMatch(ent.classname, value);
+	else if (key == "editorclass")
+		return StringMatch(ent.editorclass, value);
+	else if (key == "script_flag")
+		return StringMatch(ent.scriptflag, value);
+	else if (key == "spawnclass")
+		return StringMatch(ent.spawnclass, value);
+	else if (key == "targetname")
+		return StringMatch(ent.targetname, value);
+	else if (key == "_istrigger")
+		return ent.isTrigger;
+	else
+		std::cout << "Did not recognize property named " << key << ".\n";
+	return false;
+}
 
 int main(int argc, char* argv[])
 {
 	std::vector<Entity> entities;
+	Settings settings;
 
 	//read entity data
 	std::ifstream ReadFile(argc == 1 ? "filename.txt" : argv[1]);
 	ParseFile(ReadFile, entities);
 	ReadFile.close();
+
+	//settings
+	std::cout << "Please drag settings file onto window and press ENTER, or just press ENTER to proceed without one.\n";
+	std::string settingspath;
+	std::getline(std::cin, settingspath);
+	std::ifstream ReadSettingsFile(settingspath);
+	bool n = ReadSettings(ReadSettingsFile, settings);
+	ReadSettingsFile.close();
 
 	BrushBuilder bb;
 
@@ -784,47 +953,124 @@ int main(int argc, char* argv[])
 		for (Brush& brush : ent.brushes)
 			bb.Build( brush );
 
-
+	std::cout << "//CFG STARTS HERE\n";
 	std::cout << "sv_cheats 1;enable_debug_overlays 1;\n";
 	//write drawlines
 	for (Entity& ent : entities)
 	{
-#if 0
-		if (strcmp(ent.editorclass.c_str(), "trigger_flag_touching"))//only allow this
+		//filtering
+		bool allowed = false;
+		bool disallowed = false;
+
+		//allow for blacklist
+		if (!settings.defaultAllow)
+		{
+			for (std::string& line : settings.allows)
+			{
+				allowed = CriteriaMet(line, ent);
+				if (allowed)
+					break;//found something that allows us, even one thing
+			}
+		}
+
+		//re-dis-allow for blacklist
+		//or
+		//disallow for whitelist
+		for (std::string& line : settings.disallows)
+		{
+			disallowed = CriteriaMet(line, ent);
+			if (disallowed)
+				break;
+		}
+
+		//re-allow for whitelist
+		if (settings.defaultAllow)
+		{
+			for (std::string& line : settings.allows)
+			{
+				allowed = CriteriaMet(line, ent);
+				if (allowed)
+					break;
+			}
+		}
+		//std::cout << ent.classname << " defaultAllow " << (settings.defaultAllow ? "true" : "false") << ", disallowed " << (disallowed ? "true" : "false") << ", allowed " << (allowed ? "true" : "false") << "\n";
+		if (settings.defaultAllow)
+		{
+			if (disallowed && !allowed)
+				continue;//got disallowed, no re-allow
+		}
+		else
+		{
+			if (!allowed)
+				continue;//never was allowed
+		}
+
+		bool goodMusts = true;
+		for (std::string& line : settings.musts)
+		{
+			goodMusts = CriteriaMet(line, ent);
+			if (!goodMusts)
+				break;
+		}
+
+		if (!goodMusts)
 			continue;
-#endif
-#if 0
-		if (strcmp(ent.classname.c_str(), "trigger_once"))//only allow this
+
+		bool badAvoids = false;
+		for (std::string& line : settings.avoids)
+		{
+			badAvoids = CriteriaMet(line, ent);
+			if (badAvoids)
+				break;
+		}
+
+		if (badAvoids)
 			continue;
-#endif
+		
 		if (!ent.spawnclass.empty()) std::cout << "//Spawn Class: " << ent.spawnclass << "\n";
 		if (!ent.editorclass.empty()) std::cout << "//Editor Class: " << ent.editorclass << "\n";
 		if (!ent.classname.empty()) std::cout << "//Class Name: " << ent.classname << "\n";
 		if (!ent.targetname.empty()) std::cout << "//Target Name: " << ent.targetname << "\n";
 		if (!ent.scriptflag.empty()) std::cout << "//Script Flag: " << ent.scriptflag << "\n";
-		for (Brush& brush : ent.brushes)
+		if (ent.isTrigger && settings.drawTriggerOutlines)
 		{
-			//std::cout << "\n";
-			for (Edge& edge : brush.edges)
+			for (Brush& brush : ent.brushes)
 			{
-				Vector3 stem = ent.origin + edge.stem;
-				Vector3 tail = ent.origin + edge.tail;
+				//std::cout << "\n";
+				for (Edge& edge : brush.edges)
+				{
+					Vector3 stem = ent.origin + edge.stem;
+					Vector3 tail = ent.origin + edge.tail;
 #if 1
-				
-				std::cout << "script_client DebugDrawLine("
-					<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
-					<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
-					<< abs((int)ent.origin.x % 32) * 8 << ", "
-					<< abs((int)ent.origin.y % 32) * 8 << ", "
-					<< abs((int)ent.origin.z % 32) * 8 << ", false, 60); \n";
+
+					std::cout << "script_client DebugDrawLine("
+						<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
+						<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
+						<< abs((int)ent.origin.x % 32) * 8 << ", "
+						<< abs((int)ent.origin.y % 32) * 8 << ", "
+						<< abs((int)ent.origin.z % 32) * 8 << ", "
+						<< (!settings.drawontop ? "true" : "false") << ", "
+						<< settings.duration << ");\n";
 #else
-				// Desmos 3D lol
-				std::cout << "["
-					<< "(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
-					<< "(" << tail.x << ", " << tail.y << ", " << tail.z << ")"
-					<< "]\n";
+					// Desmos 3D lol
+					std::cout << "["
+						<< "(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
+						<< "(" << tail.x << ", " << tail.y << ", " << tail.z << ")"
+						<< "]\n";
 #endif
+				}
 			}
+		}
+		if (settings.drawEntCubes)
+		{
+			std::cout << "script_client DebugDrawCube("
+				<< "Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), "
+				<< "16, "
+				<< abs((int)ent.origin.x % 32) * 8 << ", "
+				<< abs((int)ent.origin.y % 32) * 8 << ", "
+				<< abs((int)ent.origin.z % 32) * 8 << ", "
+				<< (!settings.drawontop ? "true" : "false") << ", "
+				<< settings.duration << ");\n";
 		}
 	}
 	std::cin.get();

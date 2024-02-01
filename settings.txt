@@ -1,0 +1,8 @@
+"default" "disallow"
+"drawontop" "yes"
+"drawtriggeroutlines" "yes"
+"drawentcubes" "no"
+"duration" "60"
+"must" "_istrigger"
+"allow" "classname trigger*"
+"allow" "classname func*"
