@@ -6,7 +6,7 @@ The shape of triggers is stored as keyvalues that describe each plane in 4 numbe
 Created by Pinsplash, much help from OzxyBox.
 
 # To generate cfg files
-(Note: Once this project is running smoothly, this will be done for you.)
+Note: you do not need to do this unless you want to change how lines act or what things have outlines. You can get already-made cfg's from the [latest release](https://github.com/Pinsplash/planepoints/releases) `.zip` file.
 
 Extract the entity data with the [Titanfall VPK Tool](https://github.com/SenorGeese/Titanfall2/blob/master/tools/Titanfall_VPKTool3.4_Portable.zip). The important file will be named *`mapname`*`_script.ent`. You may also choose to take it from [this repository](https://github.com/Pinsplash/Titanfall2EntityLumps/) for convenience.
 
@@ -14,7 +14,7 @@ Drag the file(s) onto `planepoints.exe`. You can drag multiple at once.
 
 The commands will be written out to one or more cfg files in the same folder the files came from and with the same name.
 
-# Settings
+## Settings
 You can specify a file when running the program to determine which entities have lines drawn for them and the characteristics of the lines. The program will also put every group of lines used to create a trigger's shape into its own section, which can easily be copied into another cfg file to view an entity in isolation. The cfg files that are in this repository were generated with the `settings.txt` file also in the repository.
 
 These are the settings that exist:
