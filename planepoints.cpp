@@ -933,7 +933,11 @@ int main(int argc, char* argv[])
 	Settings settings;
 
 	//read entity data
-	std::ifstream ReadFile(argc == 1 ? "filename.txt" : argv[1]);
+	std::string path = argc == 1 ? "filename.txt" : argv[1];
+	std::ifstream ReadFile(path);
+	std::string base_filename = path.substr(path.find_last_of("/\\") + 1);
+	std::string::size_type const p(base_filename.find_last_of('.'));
+	std::string file_without_extension = base_filename.substr(0, p);
 	ParseFile(ReadFile, entities);
 	ReadFile.close();
 
@@ -953,8 +957,9 @@ int main(int argc, char* argv[])
 		for (Brush& brush : ent.brushes)
 			bb.Build( brush );
 
-	std::cout << "//CFG STARTS HERE\n";
-	std::cout << "sv_cheats 1;enable_debug_overlays 1;\n";
+	std::ofstream writingFile;
+	writingFile.open(file_without_extension + ".cfg");
+	writingFile << "sv_cheats 1;enable_debug_overlays 1;\n";
 	//write drawlines
 	for (Entity& ent : entities)
 	{
@@ -1027,11 +1032,11 @@ int main(int argc, char* argv[])
 		if (badAvoids)
 			continue;
 		
-		if (!ent.spawnclass.empty()) std::cout << "//Spawn Class: " << ent.spawnclass << "\n";
-		if (!ent.editorclass.empty()) std::cout << "//Editor Class: " << ent.editorclass << "\n";
-		if (!ent.classname.empty()) std::cout << "//Class Name: " << ent.classname << "\n";
-		if (!ent.targetname.empty()) std::cout << "//Target Name: " << ent.targetname << "\n";
-		if (!ent.scriptflag.empty()) std::cout << "//Script Flag: " << ent.scriptflag << "\n";
+		if (!ent.spawnclass.empty()) writingFile << "//Spawn Class: " << ent.spawnclass << "\n";
+		if (!ent.editorclass.empty()) writingFile << "//Editor Class: " << ent.editorclass << "\n";
+		if (!ent.classname.empty()) writingFile << "//Class Name: " << ent.classname << "\n";
+		if (!ent.targetname.empty()) writingFile << "//Target Name: " << ent.targetname << "\n";
+		if (!ent.scriptflag.empty()) writingFile << "//Script Flag: " << ent.scriptflag << "\n";
 		if (ent.isTrigger && settings.drawTriggerOutlines)
 		{
 			for (Brush& brush : ent.brushes)
@@ -1043,7 +1048,7 @@ int main(int argc, char* argv[])
 					Vector3 tail = ent.origin + edge.tail;
 #if 1
 
-					std::cout << "script_client DebugDrawLine("
+					writingFile << "script_client DebugDrawLine("
 						<< "Vector(" << stem.x << ", " << stem.y << ", " << stem.z << "), "
 						<< "Vector(" << tail.x << ", " << tail.y << ", " << tail.z << "), "
 						<< abs((int)ent.origin.x % 32) * 8 << ", "
@@ -1063,7 +1068,7 @@ int main(int argc, char* argv[])
 		}
 		if (settings.drawEntCubes)
 		{
-			std::cout << "script_client DebugDrawCube("
+			writingFile << "script_client DebugDrawCube("
 				<< "Vector(" << ent.origin.x << ", " << ent.origin.y << ", " << ent.origin.z << "), "
 				<< "16, "
 				<< abs((int)ent.origin.x % 32) * 8 << ", "
@@ -1073,5 +1078,7 @@ int main(int argc, char* argv[])
 				<< settings.duration << ");\n";
 		}
 	}
+	std::cout << "Finished writing to " << file_without_extension << ".cfg\n";
+	writingFile.close();
 	std::cin.get();
 }
