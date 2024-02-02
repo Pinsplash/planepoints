@@ -20,6 +20,12 @@ struct Settings
 	int duration = 60;
 	bool drawTriggerOutlines = true;
 	bool drawEntCubes = false;
+	float min_x = -INFINITY;
+	float max_x = INFINITY;
+	float min_y = -INFINITY;
+	float max_y = INFINITY;
+	float min_z = -INFINITY;
+	float max_z = INFINITY;
 };
 // Vector 3
 struct Vector3
@@ -873,6 +879,30 @@ int ReadSettings(std::ifstream& ReadFile, Settings& settings)
 		{
 			settings.avoids.push_back(value);
 		}
+		else if (key == "min_x")
+		{
+				settings.min_x = stof(value);
+		}
+		else if (key == "max_x")
+		{
+				settings.max_x = stof(value);
+		}
+		else if (key == "min_y")
+		{
+				settings.min_y = stof(value);
+		}
+		else if (key == "max_y")
+		{
+				settings.max_y = stof(value);
+		}
+		else if (key == "min_z")
+		{
+				settings.min_z = stof(value);
+		}
+		else if (key == "max_z")
+		{
+				settings.max_z = stof(value);
+		}
 	}
 	return 1;
 }
@@ -932,6 +962,95 @@ int BaseColorOffCoord(float coord)
 	return (((abs((int)coord % 64) * 4) + 128) / 1.5);
 }
 
+bool FilterXYZ(Settings& settings, Vector3 origin)
+{
+	if (settings.min_x > origin.x ||
+		settings.min_y > origin.y ||
+		settings.min_z > origin.z ||
+		settings.max_x < origin.x ||
+		settings.max_y < origin.y ||
+		settings.max_z < origin.z)
+		return false;
+	return true;
+}
+
+bool PassesFilters(Settings& settings, Entity& ent)
+{
+	//filtering
+	bool allowed = false;
+	bool disallowed = false;
+
+	//allow for blacklist
+	if (!settings.defaultAllow)
+	{
+		for (std::string& line : settings.allows)
+		{
+			allowed = CriteriaMet(line, ent);
+			if (allowed)
+				break;//found something that allows us, even one thing
+		}
+	}
+
+	//re-dis-allow for blacklist
+	//or
+	//disallow for whitelist
+	for (std::string& line : settings.disallows)
+	{
+		disallowed = CriteriaMet(line, ent);
+		if (disallowed)
+			break;
+	}
+
+	//re-allow for whitelist
+	if (settings.defaultAllow)
+	{
+		for (std::string& line : settings.allows)
+		{
+			allowed = CriteriaMet(line, ent);
+			if (allowed)
+				break;
+		}
+	}
+	//std::cout << ent.classname << " defaultAllow " << (settings.defaultAllow ? "true" : "false") << ", disallowed " << (disallowed ? "true" : "false") << ", allowed " << (allowed ? "true" : "false") << "\n";
+	if (settings.defaultAllow)
+	{
+		if (disallowed && !allowed)
+			return false;//got disallowed, no re-allow
+	}
+	else
+	{
+		if (!allowed)
+			return false;//never was allowed
+	}
+
+	bool goodMusts = true;
+	for (std::string& line : settings.musts)
+	{
+		goodMusts = CriteriaMet(line, ent);
+		if (!goodMusts)
+			break;
+	}
+
+	if (!goodMusts)
+		return false;
+
+	bool badAvoids = false;
+	for (std::string& line : settings.avoids)
+	{
+		badAvoids = CriteriaMet(line, ent);
+		if (badAvoids)
+			break;
+	}
+
+	if (badAvoids)
+		return false;
+
+	if (!FilterXYZ(settings, ent.origin))
+		return false;
+
+	return true;
+}
+
 int main(int argc, char* argv[])
 {
 	bool debug = argc == 1;
@@ -974,74 +1093,9 @@ int main(int argc, char* argv[])
 		//write drawlines
 		for (Entity& ent : entities)
 		{
-			//filtering
-			bool allowed = false;
-			bool disallowed = false;
-
-			//allow for blacklist
-			if (!settings.defaultAllow)
-			{
-				for (std::string& line : settings.allows)
-				{
-					allowed = CriteriaMet(line, ent);
-					if (allowed)
-						break;//found something that allows us, even one thing
-				}
-			}
-
-			//re-dis-allow for blacklist
-			//or
-			//disallow for whitelist
-			for (std::string& line : settings.disallows)
-			{
-				disallowed = CriteriaMet(line, ent);
-				if (disallowed)
-					break;
-			}
-
-			//re-allow for whitelist
-			if (settings.defaultAllow)
-			{
-				for (std::string& line : settings.allows)
-				{
-					allowed = CriteriaMet(line, ent);
-					if (allowed)
-						break;
-				}
-			}
-			//std::cout << ent.classname << " defaultAllow " << (settings.defaultAllow ? "true" : "false") << ", disallowed " << (disallowed ? "true" : "false") << ", allowed " << (allowed ? "true" : "false") << "\n";
-			if (settings.defaultAllow)
-			{
-				if (disallowed && !allowed)
-					continue;//got disallowed, no re-allow
-			}
-			else
-			{
-				if (!allowed)
-					continue;//never was allowed
-			}
-
-			bool goodMusts = true;
-			for (std::string& line : settings.musts)
-			{
-				goodMusts = CriteriaMet(line, ent);
-				if (!goodMusts)
-					break;
-			}
-
-			if (!goodMusts)
+			if (!PassesFilters(settings, ent))
 				continue;
 
-			bool badAvoids = false;
-			for (std::string& line : settings.avoids)
-			{
-				badAvoids = CriteriaMet(line, ent);
-				if (badAvoids)
-					break;
-			}
-
-			if (badAvoids)
-				continue;
 			int color[3];
 			color[0] = BaseColorOffCoord(ent.origin.x);
 			color[1] = BaseColorOffCoord(ent.origin.y);

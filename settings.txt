@@ -6,3 +6,5 @@
 "must" "_istrigger"
 "allow" "classname trigger*"
 "allow" "classname func*"
+"avoid" "classname trigger_soundscape"
+"avoid" "classname trigger_indoor_area"
