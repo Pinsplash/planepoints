@@ -17,6 +17,7 @@ struct Settings
 	std::vector<std::string> disallows;
 	std::vector<std::string> musts;
 	std::vector<std::string> avoids;
+	std::vector<std::string> clrOverrides;
 	int duration = 60;
 	bool drawTriggerOutlines = true;
 	bool drawEntCubes = false;
@@ -860,49 +861,35 @@ int ReadSettings(std::ifstream& ReadFile, Settings& settings)
 			}
 		}
 		else if (key == "duration")
-		{
 			settings.duration = stoi(value);
-		}
+
 		else if (key == "allow" && !settings.defaultAllow)
-		{
 			settings.allows.push_back(value);
-		}
+
 		else if (key == "disallow" && settings.defaultAllow)
-		{
 			settings.disallows.push_back(value);
-		}
+
 		else if (key == "must")
-		{
 			settings.musts.push_back(value);
-		}
+
 		else if (key == "avoid")
-		{
 			settings.avoids.push_back(value);
-		}
+
+		else if (key == "color")
+			settings.clrOverrides.push_back(value);
+
 		else if (key == "min_x")
-		{
 				settings.min_x = stof(value);
-		}
 		else if (key == "max_x")
-		{
 				settings.max_x = stof(value);
-		}
 		else if (key == "min_y")
-		{
 				settings.min_y = stof(value);
-		}
 		else if (key == "max_y")
-		{
 				settings.max_y = stof(value);
-		}
 		else if (key == "min_z")
-		{
 				settings.min_z = stof(value);
-		}
 		else if (key == "max_z")
-		{
 				settings.max_z = stof(value);
-		}
 	}
 	return 1;
 }
@@ -929,17 +916,8 @@ bool StringMatch(std::string strEnt, std::string strSetting)
 	return false;
 }
 
-bool CriteriaMet(std::string& line, Entity& ent)
+bool CriteriaMet(std::string& key, std::string& value, Entity& ent)
 {
-	size_t keyStart = line.find('"');
-	size_t keyEnd = line.find(' ', keyStart + 1);
-	size_t valueEnd = line.find('"', keyEnd + 1);
-
-	keyStart++;
-	std::string key = line.substr(keyStart, keyEnd - keyStart);
-	keyEnd++;
-	std::string value = line.substr(keyEnd, valueEnd - keyEnd);
-
 	if (key == "classname")
 		return StringMatch(ent.classname, value);
 	else if (key == "editorclass")
@@ -974,6 +952,23 @@ bool FilterXYZ(Settings& settings, Vector3 origin)
 	return true;
 }
 
+//monstrosity
+void ParsePair(std::string& line, std::string& key, std::string& value, char c1, char c2, char c3, std::string* rest = NULL)
+{
+	size_t keyStart = line.find(c1);
+	size_t keyEnd = line.find(c2, keyStart + 1);
+	size_t valueEnd = line.find(c3, keyEnd + 1);
+
+	keyStart++;
+	key = line.substr(keyStart, keyEnd - keyStart);
+
+	keyEnd++;
+	value = line.substr(keyEnd, valueEnd - keyEnd);
+
+	if (rest != NULL)
+		*rest = line.substr(valueEnd);
+}
+
 bool PassesFilters(Settings& settings, Entity& ent)
 {
 	//filtering
@@ -985,7 +980,10 @@ bool PassesFilters(Settings& settings, Entity& ent)
 	{
 		for (std::string& line : settings.allows)
 		{
-			allowed = CriteriaMet(line, ent);
+			std::string key;
+			std::string value;
+			ParsePair(line, key, value, '"', ' ', '"');
+			allowed = CriteriaMet(key, value, ent);
 			if (allowed)
 				break;//found something that allows us, even one thing
 		}
@@ -996,7 +994,10 @@ bool PassesFilters(Settings& settings, Entity& ent)
 	//disallow for whitelist
 	for (std::string& line : settings.disallows)
 	{
-		disallowed = CriteriaMet(line, ent);
+		std::string key;
+		std::string value;
+		ParsePair(line, key, value, '"', ' ', '"');
+		disallowed = CriteriaMet(key, value, ent);
 		if (disallowed)
 			break;
 	}
@@ -1006,7 +1007,10 @@ bool PassesFilters(Settings& settings, Entity& ent)
 	{
 		for (std::string& line : settings.allows)
 		{
-			allowed = CriteriaMet(line, ent);
+			std::string key;
+			std::string value;
+			ParsePair(line, key, value, '"', ' ', '"');
+			allowed = CriteriaMet(key, value, ent);
 			if (allowed)
 				break;
 		}
@@ -1026,7 +1030,10 @@ bool PassesFilters(Settings& settings, Entity& ent)
 	bool goodMusts = true;
 	for (std::string& line : settings.musts)
 	{
-		goodMusts = CriteriaMet(line, ent);
+		std::string key;
+		std::string value;
+		ParsePair(line, key, value, '"', ' ', '"');
+		goodMusts = CriteriaMet(key, value, ent);
 		if (!goodMusts)
 			break;
 	}
@@ -1037,7 +1044,10 @@ bool PassesFilters(Settings& settings, Entity& ent)
 	bool badAvoids = false;
 	for (std::string& line : settings.avoids)
 	{
-		badAvoids = CriteriaMet(line, ent);
+		std::string key;
+		std::string value;
+		ParsePair(line, key, value, '"', ' ', '"');
+		badAvoids = CriteriaMet(key, value, ent);
 		if (badAvoids)
 			break;
 	}
@@ -1049,6 +1059,26 @@ bool PassesFilters(Settings& settings, Entity& ent)
 		return false;
 
 	return true;
+}
+
+bool ColorOverride(Settings& settings, Entity& ent, int* color)
+{
+	for (std::string& line : settings.clrOverrides)
+	{
+		std::string key;
+		std::string value;
+		std::string rest;
+		ParsePair(line, key, value, '"', ' ', ' ', &rest);
+		if (CriteriaMet(key, value, ent))
+		{
+			Vector3 vecClr = ParseVector(rest);
+			color[0] = vecClr.x;
+			color[1] = vecClr.y;
+			color[2] = vecClr.z;
+			return true;
+		}
+	}
+	return false;
 }
 
 int main(int argc, char* argv[])
@@ -1097,9 +1127,12 @@ int main(int argc, char* argv[])
 				continue;
 
 			int color[3];
-			color[0] = BaseColorOffCoord(ent.origin.x);
-			color[1] = BaseColorOffCoord(ent.origin.y);
-			color[2] = BaseColorOffCoord(ent.origin.z);
+			if (!ColorOverride(settings, ent, color))
+			{
+				color[0] = BaseColorOffCoord(ent.origin.x);
+				color[1] = BaseColorOffCoord(ent.origin.y);
+				color[2] = BaseColorOffCoord(ent.origin.z);
+			}
 			if (!ent.spawnclass.empty()) writingFile << "//Spawn Class: " << ent.spawnclass << "\n";
 			if (!ent.editorclass.empty()) writingFile << "//Editor Class: " << ent.editorclass << "\n";
 			if (!ent.classname.empty()) writingFile << "//Class Name: " << ent.classname << "\n";

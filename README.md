@@ -29,6 +29,7 @@ These are the settings that exist:
 * **must**: A criteria which is strictly required. Multiple can be defined. All **must** criteria need to be met for an entity to be allowed, even after accounting for **allow** and **disallow**.
 * **avoid**: A criteria that cannot be allowed in any circumstance. Multiple can be defined. All **avoid** criteria need to *not* be met for an entity to be allowed, even after accounting for **allow** and **disallow**.
 * **min_x**, **max_x**, **min_y**, **max_y**, **min_z**, **max_z**: Coordinate boundaries that an entity's origin must be within. You can find the player's coordinates with `cl_showpos 1`. Not all 6 need to be defined, only the ones you want.
+* **color**: If an entity matches this criterion, it will be drawn with the specified color. Ex. `"color" "classname trigger_hurt 255 0 0"` If an entity doesn't have a color defined for it, its color will be based off its position.
 
 Allow and disallow criteria work as follows: A property to select by, and then potentially something that the value of the property must match. A * can be used to limit the filtering to only the characters up until that point in a value's string.
 
