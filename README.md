@@ -39,6 +39,9 @@ Explanations of the first few properties can be found [here](https://github.com/
 * **editorclass**
 * **script_flag**
 * **spawnclass**
+* **script_name**: Uncertain.
+* **scr_flagTrueAll**: All specified flags must be true for the trigger to be activated?
+* **scr_flagFalseAll**: All specified flags must be false for the trigger to be activated?
 * **targetname**: A name by which other things can refer to a specific instance of an entity. Multiple entities can share the same targetname if it is necessary to create an effect across multiple entities at once.
 * **_istrigger**: Tells if the entity is a trigger. All entities with a `*trigger_brush_` keyvalue are considered triggers and can use the trigger outline display. There is no second part needed for this property.
 

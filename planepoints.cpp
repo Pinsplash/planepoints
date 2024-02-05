@@ -156,7 +156,10 @@ struct Entity
 	std::string editorclass;
 	std::string classname;
 	std::string targetname;
-	std::string scriptflag;
+	std::string script_flag;
+	std::string script_name;
+	std::string scr_flagTrueAll;
+	std::string scr_flagFalseAll;
 	std::string spawnclass;
 
 	Vector3 origin;
@@ -371,25 +374,29 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 		std::string value = textLine.substr(valueStart, valueEnd - valueStart);
 
 		if (key == "editorclass")
-		{
 			newEntity.editorclass = value;
-		}
+
 		else if (key == "origin")
-		{
 			newEntity.origin = ParseVector(value);
-		}
+
 		else if (key == "targetname")
-		{
 			newEntity.targetname = value;
-		}
+
 		else if (key == "script_flag")
-		{
-			newEntity.scriptflag = value;
-		}
+			newEntity.script_flag = value;
+
+		else if (key == "script_name")
+			newEntity.script_name = value;
+
+		else if (key == "scr_flagTrueAll")
+			newEntity.scr_flagTrueAll = value;
+
+		else if (key == "scr_flagFalseAll")
+			newEntity.scr_flagFalseAll = value;
+
 		else if (key == "spawnclass")
-		{
 			newEntity.spawnclass = value;
-		}
+
 		else if (key == "classname")
 		{
 			newEntity.classname = value;
@@ -460,13 +467,9 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 #endif
 		}
 		else if (key == "*trigger_bounds_mins")
-		{
 			newEntity.mins = ParseVector(value);
-		}
 		else if (key == "*trigger_bounds_maxs")
-		{
 			newEntity.maxs = ParseVector(value);
-		}
 	}
 }
 
@@ -923,7 +926,13 @@ bool CriteriaMet(std::string& key, std::string& value, Entity& ent)
 	else if (key == "editorclass")
 		return StringMatch(ent.editorclass, value);
 	else if (key == "script_flag")
-		return StringMatch(ent.scriptflag, value);
+		return StringMatch(ent.script_flag, value);
+	else if (key == "script_name")
+		return StringMatch(ent.script_name, value);
+	else if (key == "scr_flagTrueAll")
+		return StringMatch(ent.scr_flagTrueAll, value);
+	else if (key == "scr_flagFalseAll")
+		return StringMatch(ent.scr_flagFalseAll, value);
 	else if (key == "spawnclass")
 		return StringMatch(ent.spawnclass, value);
 	else if (key == "targetname")
@@ -1137,7 +1146,10 @@ int main(int argc, char* argv[])
 			if (!ent.editorclass.empty()) writingFile << "//Editor Class: " << ent.editorclass << "\n";
 			if (!ent.classname.empty()) writingFile << "//Class Name: " << ent.classname << "\n";
 			if (!ent.targetname.empty()) writingFile << "//Target Name: " << ent.targetname << "\n";
-			if (!ent.scriptflag.empty()) writingFile << "//Script Flag: " << ent.scriptflag << "\n";
+			if (!ent.script_flag.empty()) writingFile << "//Script Flag: " << ent.script_flag << "\n";
+			if (!ent.script_name.empty()) writingFile << "//Script Name: " << ent.script_name << "\n";
+			if (!ent.scr_flagTrueAll.empty()) writingFile << "//scr_flagTrueAll: " << ent.scr_flagTrueAll << "\n";
+			if (!ent.scr_flagFalseAll.empty()) writingFile << "//scr_flagFalseAll: " << ent.scr_flagFalseAll << "\n";
 			if (ent.isTrigger && settings.drawTriggerOutlines)
 			{
 				for (Brush& brush : ent.brushes)
