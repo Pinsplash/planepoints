@@ -160,6 +160,7 @@ struct Entity
 	std::string script_name;
 	std::string scr_flagTrueAll;
 	std::string scr_flagFalseAll;
+	std::string scr_flagSet;
 	std::string spawnclass;
 
 	Vector3 origin;
@@ -393,6 +394,9 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 
 		else if (key == "scr_flagFalseAll")
 			newEntity.scr_flagFalseAll = value;
+
+		else if (key == "scr_flagFalseAll")
+			newEntity.scr_flagSet = value;
 
 		else if (key == "spawnclass")
 			newEntity.spawnclass = value;
@@ -933,6 +937,8 @@ bool CriteriaMet(std::string& key, std::string& value, Entity& ent)
 		return StringMatch(ent.scr_flagTrueAll, value);
 	else if (key == "scr_flagFalseAll")
 		return StringMatch(ent.scr_flagFalseAll, value);
+	else if (key == "scr_flagSet")
+		return StringMatch(ent.scr_flagSet, value);
 	else if (key == "spawnclass")
 		return StringMatch(ent.spawnclass, value);
 	else if (key == "targetname")
@@ -1150,6 +1156,7 @@ int main(int argc, char* argv[])
 			if (!ent.script_name.empty()) writingFile << "//Script Name: " << ent.script_name << "\n";
 			if (!ent.scr_flagTrueAll.empty()) writingFile << "//scr_flagTrueAll: " << ent.scr_flagTrueAll << "\n";
 			if (!ent.scr_flagFalseAll.empty()) writingFile << "//scr_flagFalseAll: " << ent.scr_flagFalseAll << "\n";
+			if (!ent.scr_flagSet.empty()) writingFile << "//scr_flagSet: " << ent.scr_flagSet << "\n";
 			if (ent.isTrigger && settings.drawTriggerOutlines)
 			{
 				for (Brush& brush : ent.brushes)
