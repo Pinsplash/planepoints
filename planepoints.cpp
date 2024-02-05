@@ -395,7 +395,7 @@ void ParseFile(std::ifstream& ReadFile, std::vector<Entity>& entities)
 		else if (key == "scr_flagFalseAll")
 			newEntity.scr_flagFalseAll = value;
 
-		else if (key == "scr_flagFalseAll")
+		else if (key == "scr_flagSet")
 			newEntity.scr_flagSet = value;
 
 		else if (key == "spawnclass")
