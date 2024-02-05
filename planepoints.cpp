@@ -770,7 +770,6 @@ void BrushBuilder::Build( Brush& brush )
 		}
 	}
 
-
 	// Emit edges
 	int iEdge = 0;
 	for ( int iPlane1 = 0; iPlane1 < nPlanes - 1; iPlane1++ )
@@ -781,6 +780,20 @@ void BrushBuilder::Build( Brush& brush )
 
 			// Skip invalid edges
 			if ( edge.iVertex1 == k_iInvalidVertex || edge.iVertex2 == k_iInvalidVertex )
+				continue;
+
+			//weed out duplicates
+			bool dupe = false;
+			for (Edge& existingEdge : brush.edges)
+			{
+				//stems match and tails match
+				if (m_vecVerts[edge.iVertex1] == existingEdge.stem && m_vecVerts[edge.iVertex2] == existingEdge.tail)
+					dupe = true;
+				//inverse match
+				if (m_vecVerts[edge.iVertex1] == existingEdge.tail && m_vecVerts[edge.iVertex2] == existingEdge.stem)
+					dupe = true;
+			}
+			if (dupe)
 				continue;
 
 			// Emit!
