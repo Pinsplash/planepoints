@@ -18,3 +18,4 @@
 "color" "editorclass trigger_checkpoint_safe 0 0 200"
 "color" "editorclass trigger_checkpoint_silent 0 0 200"
 "color" "editorclass trigger_checkpoint_to_safe_spots 0 0 200"
+"color" "script_name fire_trigger 200 128 0"
